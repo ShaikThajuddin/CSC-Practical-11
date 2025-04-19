@@ -1,0 +1,45 @@
+import { DynamoDBClient, QueryCommand } from "@aws-sdk/client-dynamodb";
+import { unmarshall } from "@aws-sdk/util-dynamodb";
+
+const REGION = "us-east-1";
+const dynamoDBClient = new DynamoDBClient({ region: REGION });
+
+export const handler = async (event, context, callback) => {
+  try {
+    // Validate input
+    if (!event.ID || typeof event.ID !== "string") {
+      return callback(new Error("Missing or invalid 'ID' in event"));
+    }
+
+    // Build and send the query
+    const command = new QueryCommand({
+      TableName: "student",
+      KeyConditionExpression: "id = :id",
+      ExpressionAttributeValues: {
+        ":id": { S: event.ID },
+      },
+    });
+
+    const response = await dynamoDBClient.send(command);
+
+    // Handle no items found
+    if (!response.Items || response.Items.length === 0) {
+      return callback(null, { message: "No student found with the given ID." });
+    }
+
+    const items = response.Items.map((item) => unmarshall(item));
+
+    const result = {
+      Item: {
+        ID: items[0].id,
+        FirstName: items[0].firstname,
+        LastName: items[0].lastname,
+      },
+    };
+
+    callback(null, result);
+  } catch (error) {
+    console.error("DynamoDB query error:", error);
+    callback(error);
+  }
+};
